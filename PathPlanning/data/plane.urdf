@@ -21,9 +21,90 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 -5"/>
       <geometry>
-	 	<box size="30 30 10"/>
+	 	<box size="32 32 10"/>
       </geometry>
     </collision>
   </link>
+
+  <link name = "right_wall">
+    <visual>
+      <origin xyz="15 0 0"/>
+      <geometry>
+        <box size="1 32 1" />
+      </geometry>
+    </visual>
+      <collision>
+      <origin xyz="15 0 0"/>
+      <geometry>
+        <box size="1 32 1" />
+      </geometry>
+    </collision>
+  </link>
+
+    <link name = "left_wall">
+    <visual>
+      <origin xyz="-15 0 0"/>
+      <geometry>
+        <box size="1 32 1" />
+      </geometry>
+    </visual>
+        <collision>
+      <origin xyz="-15 0 0"/>
+      <geometry>
+        <box size="1 32 1" />
+      </geometry>
+    </collision>
+  </link>
+
+    <link name = "top_wall">
+    <visual>
+      <origin xyz="0 15 0"/>
+      <geometry>
+        <box size="30 1 1" />
+      </geometry>
+    </visual>
+        <collision>
+      <origin xyz="0 15 0"/>
+      <geometry>
+        <box size="30 1 1" />
+      </geometry>
+    </collision>
+  </link>
+
+    <link name = "bottom_wall">
+    <visual>
+      <origin xyz="0 -15 0"/>
+      <geometry>
+        <box size="30 1 1" />
+      </geometry>
+    </visual>
+        <collision>
+      <origin xyz="0 -15 0"/>
+      <geometry>
+        <box size="30 1 1" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="joint1" type="fixed">
+    <parent link="planeLink"/>
+    <child link="left_wall"/>
+  </joint>
+
+    <joint name="joint2" type="fixed">
+    <parent link="planeLink"/>
+    <child link="right_wall"/>
+  </joint>
+
+    <joint name="joint3" type="fixed">
+    <parent link="planeLink"/>
+    <child link="top_wall"/>
+  </joint>
+
+    <joint name="joint4" type="fixed">
+    <parent link="planeLink"/>
+    <child link="bottom_wall"/>
+  </joint>
+
 </robot>
 

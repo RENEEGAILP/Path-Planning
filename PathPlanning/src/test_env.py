@@ -7,7 +7,7 @@ p.connect(p.GUI)
 # p.setAdditionalSearchPath(pybullet_data.getDataPath())
 
 p.loadURDF("../data/plane.urdf")
-p.loadURDF("../data/wall.urdf")
+# p.loadURDF("../data/wall.urdf")
 p.setGravity(0, 0, -10)
 husky1pos = [1, 1, 0.1]
 husky2pos = [-1, -1, 0.1]
@@ -37,7 +37,8 @@ targetVel = -10
 for joint in range(2, 6):
   p.setJointMotorControl(husky, joint, p.VELOCITY_CONTROL, targetVel, maxForce)
   p.setJointMotorControl(husky_2, joint, p.VELOCITY_CONTROL, -targetVel, maxForce)
-for step in range(3000):
+# for step in range(3000):
+while(True):
   p.stepSimulation()
 
 p.getContactPoints(husky)
