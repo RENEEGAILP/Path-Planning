@@ -7,6 +7,7 @@ p.connect(p.GUI)
 
 p.loadURDF("../data/plane.urdf")
 p.setGravity(0, 0, -10)
+p.setTimeStep(0.009)
 
 # adding static obstacles to the environment (uncomment for obstacles)
 # obs_1 = p.loadURDF("../data/obstacle.urdf", [0, 10, 0], useFixedBase=1)
@@ -22,7 +23,7 @@ husky_1 = p.loadURDF("../data/husky/husky.urdf", husky1pos)
 husky_2 = p.loadURDF("../data/husky/husky.urdf", husky2pos)
 
 # Adjust the position of the camera
-p.resetDebugVisualizerCamera(cameraDistance=12, cameraYaw=-180, cameraPitch=-120, cameraTargetPosition=[0, 0, 0])
+p.resetDebugVisualizerCamera(cameraDistance=20, cameraYaw=-180, cameraPitch=-120, cameraTargetPosition=[0, 0, 0])
 
 def setJointControlsOfHusky(robot_id):
     # set joint controls
@@ -40,11 +41,13 @@ def setJointControlsOfHusky(robot_id):
 def rotateHuskyToFaceTarget(robot_id, target_location):
     # calculate new orientation and reset the robots
     robot_pos, robot_orn = p.getBasePositionAndOrientation(robot_id)
-    euler_orn = p.getEulerFromQuaternion(robot_orn)
-    # print(euler_orn)
-    target_orn = np.arctan2(target_location[0], target_location[1])
-    # print(target_orn)
-    quaternion = p.getQuaternionFromEuler([euler_orn[0], euler_orn[1], euler_orn[2] + target_orn])
+    (roll, pitch, theta) = p.getEulerFromQuaternion(robot_orn)
+    # calculate how much the robot has to rotate to face the target
+    angle_to_goal = np.arctan2(target_location[1] - robot_pos[1], target_location[0] - robot_pos[0])
+    # restrict angle to (-pi,pi)
+    angle_to_goal = ((angle_to_goal + np.pi) % (2.0 * np.pi)) - np.pi
+
+    quaternion = p.getQuaternionFromEuler([roll, pitch,  angle_to_goal])
     p.resetBasePositionAndOrientation(robot_id, robot_pos, quaternion)
 
 def checkCollision(robot_id, target_location):
@@ -71,7 +74,7 @@ def checkCollision(robot_id, target_location):
 def moveRobotInternal(robot_id, target_location):
     dist = 100
     count = 0
-    while dist > 0.05:
+    while dist > 0.1:
         count += 1
         # find Euclidean distance to target position
         current_pos, _ = p.getBasePositionAndOrientation(robot_id)
@@ -95,7 +98,9 @@ def moveRobotToTarget(robot_id, target_location):
 
 
 success = moveRobotToTarget(husky_1, [10, 10, 0.1])
-
+success = moveRobotToTarget(husky_1, [10, -10, 0.1])
+success = moveRobotToTarget(husky_1, [-10, -10, 0.1])
+success = moveRobotToTarget(husky_1, [-10, 10, 0.1])
 print("Robot moved")
 # --------------------------TEST CODE-----------------------------------------
 # numJoints = p.getNumJoints(husky_1)
