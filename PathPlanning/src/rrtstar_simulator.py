@@ -145,7 +145,7 @@ class RRTStar:
         p.connect(p.GUI)
         p.loadURDF("../data/plane.urdf")
         p.setGravity(0, 0, -10)
-        p.setTimeStep(0.005)
+        p.setTimeStep(0.004)
 
         if obstacles:
             self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [0, 10, 0], useFixedBase=1))
@@ -184,8 +184,8 @@ class RRTStar:
         dist, theta = self.get_distance_and_angle(node_start, node_goal)
 
         dist = min(self.step_len, dist)
-        node_new = Node(node_start.x + dist * math.cos(theta),
-                        node_start.y + dist * math.sin(theta))
+        node_new = Node(node_start.x + (dist * math.cos(theta)),
+                        node_start.y + (dist * math.sin(theta)))
 
         node_new.parent = node_start
 
@@ -314,13 +314,13 @@ class RRTStar:
     def move_robot_internal(self, target_location):
         dist = 100
         count = 0
-        while dist > 0.1:
+        while dist > 0.5:
             count += 1
             # find Euclidean distance to target position
             current_pos, _ = self.env.getBasePositionAndOrientation(self.robot_id)
             dist = np.sqrt(pow((target_location[0] - current_pos[0]), 2) +
                            pow((target_location[1] - current_pos[1]), 2))
-            p.stepSimulation()
+            self.env.stepSimulation()
 
     def move_robot_to_target(self, target_location):
         self.rotate_husky_to_face_target(target_location)
@@ -341,6 +341,13 @@ class RRTStar:
         for position in reversed(self.path):
             self.move_robot_to_target(position)
 
+    def draw_path(self):
+
+        path_3d = [node + [0.1] for node in self.path]
+        for i in range(1, len(self.path)):
+            self.env.addUserDebugLine(path_3d[i - 1],
+                                      path_3d[i],
+                                      [0, 0, 0])
 
     def planning(self):
         for k in range(self.iter_max):
@@ -374,9 +381,9 @@ rrt_star = RRTStar(start_pos=[-12, -12],
                    search_radius=5,
                    iter_max=2000)
 
-
 rrt_star.setup_environment(True)
 path = rrt_star.planning()
-rrt_star.move_robot()
+rrt_star.draw_path()
 print(path)
+rrt_star.move_robot()
 print("The end!")
