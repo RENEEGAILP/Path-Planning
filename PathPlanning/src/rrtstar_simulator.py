@@ -17,10 +17,9 @@ p.setTimeStep(0.009)
 # obs_5 = p.loadURDF("../data/obstacle.urdf", [5, 0, 0], useFixedBase=1)
 
 # initializing the robot
-husky1pos = [-12, -12, 0.1]
-husky2pos = [-1, -1, 0.1]
-husky_1 = p.loadURDF("../data/husky/husky.urdf", husky1pos)
-husky_2 = p.loadURDF("../data/husky/husky.urdf", husky2pos)
+husky_start_pos = [-12, -12, 0.1]
+husky_goal_pos = [10, 10, 0.1]
+husky_1 = p.loadURDF("../data/husky/husky.urdf", husky_start_pos)
 
 # Adjust the position of the camera
 p.resetDebugVisualizerCamera(cameraDistance=20, cameraYaw=-180, cameraPitch=-120, cameraTargetPosition=[0, 0, 0])
@@ -36,7 +35,6 @@ def setJointControlsOfHusky(robot_id):
     max_force = 100  # Newton
     for joint in range(2, 6):
         p.setJointMotorControl(husky_1, joint, p.VELOCITY_CONTROL, target_vel, max_force)
-        p.setJointMotorControl(husky_2, joint, p.VELOCITY_CONTROL, -target_vel, max_force)
 
 def rotateHuskyToFaceTarget(robot_id, target_location):
     # calculate new orientation and reset the robots
