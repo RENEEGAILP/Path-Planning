@@ -210,10 +210,14 @@ class RRTStar:
         f_r_rel_pos = self.env.getJointInfo(self.robot_id, 3)[14]
 
         # we can't check for a single ray because the wheels are spread out
-        f_l_pos = tuple(map(operator.add, f_l_rel_pos, [node_nearest.x, node_nearest.y, 0.1]))
-        f_r_pos = tuple(map(operator.add, f_r_rel_pos, [node_nearest.x, node_nearest.y, 0.1]))
-        target_f_l_pos = tuple(map(operator.add, f_l_rel_pos, [node_new.x, node_new.y, 0.1]))
-        target_f_r_pos = tuple(map(operator.add, f_r_rel_pos, [node_new.x, node_new.y, 0.1]))
+        # pad the robot by a small value to avoid going near obstacles
+        # f_l_rel_pos = tuple(map(operator.mul, f_l_rel_pos, [2, 2, 0.0]))
+        # f_r_rel_pos = tuple(map(operator.mul, f_r_rel_pos, [2, 2, 0.0]))
+
+        f_l_pos = tuple(map(operator.add, f_l_rel_pos, [node_nearest.x, node_nearest.y, 0.0]))
+        f_r_pos = tuple(map(operator.add, f_r_rel_pos, [node_nearest.x, node_nearest.y, 0.0]))
+        target_f_l_pos = tuple(map(operator.add, f_l_rel_pos, [node_new.x, node_new.y, 0.0]))
+        target_f_r_pos = tuple(map(operator.add, f_r_rel_pos, [node_new.x, node_new.y, 0.0]))
 
         # shoot rays
         collision_obj = self.env.rayTestBatch([f_l_pos, f_r_pos], [target_f_l_pos, target_f_r_pos])
@@ -283,6 +287,60 @@ class RRTStar:
 
         return path
 
+    def rotate_husky_to_face_target(self, target_location):
+        # calculate new orientation and reset the robots
+        robot_pos, robot_orn = self.env.getBasePositionAndOrientation(self.robot_id)
+        (roll, pitch, theta) = self.env.getEulerFromQuaternion(robot_orn)
+        # calculate how much the robot has to rotate to face the target
+        angle_to_goal = np.arctan2(target_location[1] - robot_pos[1], target_location[0] - robot_pos[0])
+        # restrict angle to (-pi,pi)
+        angle_to_goal = ((angle_to_goal + np.pi) % (2.0 * np.pi)) - np.pi
+
+        quaternion = self.env.getQuaternionFromEuler([roll, pitch, angle_to_goal])
+        p.resetBasePositionAndOrientation(self.robot_id, robot_pos, quaternion)
+
+    def set_joint_controls_of_husky(self):
+        # set joint controls
+        # uncomment to get info about all joints
+        # numJoints = p.getNumJoints(robot_id)
+        # for joint in range(numJoints):
+        #     print(p.getJointInfo(robot_id, joint))
+
+        target_vel = 10  # rad/s
+        max_force = 100  # Newton
+        for joint in range(2, 6):
+            self.env.setJointMotorControl(self.robot_id, joint, p.VELOCITY_CONTROL, target_vel, max_force)
+
+    def move_robot_internal(self, target_location):
+        dist = 100
+        count = 0
+        while dist > 0.1:
+            count += 1
+            # find Euclidean distance to target position
+            current_pos, _ = self.env.getBasePositionAndOrientation(self.robot_id)
+            dist = np.sqrt(pow((target_location[0] - current_pos[0]), 2) +
+                           pow((target_location[1] - current_pos[1]), 2))
+            p.stepSimulation()
+
+    def move_robot_to_target(self, target_location):
+        self.rotate_husky_to_face_target(target_location)
+        # check collision should be called after rotating the husky
+        # collision = checkCollision(self.robot_id, target_location)
+        # if not collision:
+        #     setJointControlsOfHusky(self.robot_id)
+        #     moveRobotInternal(robot_id, target_location)
+        #     return True
+        # else:
+        #     # ToDO: Reset husky to original orientation?
+        #     print("Robot not moved. Path is in collision with obstacles")
+        #     return False
+        self.set_joint_controls_of_husky()
+        self.move_robot_internal(target_location)
+
+    def move_robot(self):
+        for position in reversed(self.path):
+            self.move_robot_to_target(position)
+
 
     def planning(self):
         for k in range(self.iter_max):
@@ -311,12 +369,14 @@ class RRTStar:
 
 rrt_star = RRTStar(start_pos=[-12, -12],
                    goal_pos=[12, 12],
-                   step_len=3,
-                   goal_sample_rate=0.05,
+                   step_len=4,
+                   goal_sample_rate=0.002,
                    search_radius=5,
-                   iter_max=1000)
+                   iter_max=2000)
+
 
 rrt_star.setup_environment(True)
 path = rrt_star.planning()
+rrt_star.move_robot()
 print(path)
 print("The end!")
