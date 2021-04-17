@@ -2,6 +2,7 @@ import pybullet as p
 import numpy as np
 import operator
 import math
+from shapely.geometry import LineString
 
 
 # creating the environment
@@ -199,7 +200,7 @@ class RRTStar:
 
         dist_table = [math.hypot(nd.x - node_new.x, nd.y - node_new.y) for nd in self.vertex]
         dist_table_index = [ind for ind in range(len(dist_table)) if dist_table[ind] <= r and
-                            not self.check_collision(node_new, self.vertex[ind])]
+                            not self.check_collision2(node_new, self.vertex[ind])]
 
         return dist_table_index
 
@@ -211,16 +212,93 @@ class RRTStar:
 
         # we can't check for a single ray because the wheels are spread out
         # pad the robot by a small value to avoid going near obstacles
-        # f_l_rel_pos = tuple(map(operator.mul, f_l_rel_pos, [2, 2, 0.0]))
-        # f_r_rel_pos = tuple(map(operator.mul, f_r_rel_pos, [2, 2, 0.0]))
+        f_l_rel_pos = tuple(map(operator.mul, f_l_rel_pos, [2, 2, 0.0]))
+        f_r_rel_pos = tuple(map(operator.mul, f_r_rel_pos, [2, 2, 0.0]))
 
         f_l_pos = tuple(map(operator.add, f_l_rel_pos, [node_nearest.x, node_nearest.y, 0.0]))
         f_r_pos = tuple(map(operator.add, f_r_rel_pos, [node_nearest.x, node_nearest.y, 0.0]))
+
+
         target_f_l_pos = tuple(map(operator.add, f_l_rel_pos, [node_new.x, node_new.y, 0.0]))
         target_f_r_pos = tuple(map(operator.add, f_r_rel_pos, [node_new.x, node_new.y, 0.0]))
 
         # shoot rays
         collision_obj = self.env.rayTestBatch([f_l_pos, f_r_pos], [target_f_l_pos, target_f_r_pos])
+
+        # check if object ids are detected
+        if collision_obj[0][0] == -1:
+            # print("No collision")
+            return False
+        else:
+            # print("Collision")
+            return True
+
+    def check_collision2(self, node_start, node_goal):
+
+        # robot_pos, robot_orn = self.env.getBasePositionAndOrientation(self.robot_id)
+        # node_start = Node(robot_pos[0], robot_pos[1])
+        # node_goal = Node(node_goal[0], node_goal[1])
+        # shoot rays from both the front wheel to target to check collision
+        # robot_pos, robot_orn = p.getBasePositionAndOrientation(robot_id)
+        f_l_rel_pos = self.env.getJointInfo(self.robot_id, 2)[14]
+        f_r_rel_pos = self.env.getJointInfo(self.robot_id, 3)[14]
+
+        # we can't check for a single ray because the wheels are spread out
+        # pad the robot by a small value to avoid going near obstacles
+        # f_l_rel_pos = tuple(map(operator.mul, f_l_rel_pos, [2, 2, 0.0]))
+        # f_r_rel_pos = tuple(map(operator.mul, f_r_rel_pos, [2, 2, 0.0]))
+
+        _, theta = self.get_distance_and_angle(node_start, node_goal)
+        dist_between_wheels = f_l_rel_pos[1] - f_r_rel_pos[1]
+
+        dist = f_l_rel_pos[0]
+        node_new = Node(node_start.x + (dist * math.cos(theta)),
+                        node_start.y + (dist * math.sin(theta)))
+
+        a = (node_start.x, node_start.y)
+        b = (node_new.x, node_new.y)
+        cd_length = dist_between_wheels
+
+        ab = LineString([a, b])
+        left = ab.parallel_offset(cd_length / 2, 'left')
+        right = ab.parallel_offset(cd_length / 2, 'right')
+        c = left.boundary[1]
+        d = right.boundary[0]
+
+        f_l_pos = [c.x, c.y, 0.1]
+        f_r_pos = [d.x, d.y, 0.1]
+
+        ######################################### for target
+        node_new = Node(node_goal.x + (dist * math.cos(theta)),
+                        node_goal.y + (dist * math.sin(theta)))
+
+        a = (node_goal.x, node_goal.y)
+        b = (node_new.x, node_new.y)
+        cd_length = dist_between_wheels
+
+        ab = LineString([a, b])
+        left = ab.parallel_offset(cd_length / 2, 'left')
+        right = ab.parallel_offset(cd_length / 2, 'right')
+        c = left.boundary[1]
+        d = right.boundary[0]
+
+        target_f_l_pos = [c.x, c.y, 0.1]
+        target_f_r_pos = [d.x, d.y, 0.1]
+
+        # f_l_pos = tuple(map(operator.add, f_l_rel_pos, [node_nearest.x, node_nearest.y, 0.0]))
+        # f_r_pos = tuple(map(operator.add, f_r_rel_pos, [node_nearest.x, node_nearest.y, 0.0]))
+        #
+        # target_f_l_pos = tuple(map(operator.add, f_l_rel_pos, [node_new.x, node_new.y, 0.0]))
+        # target_f_r_pos = tuple(map(operator.add, f_r_rel_pos, [node_new.x, node_new.y, 0.0]))
+
+        # shoot rays
+        collision_obj = self.env.rayTestBatch([f_l_pos, f_r_pos], [target_f_l_pos, target_f_r_pos])
+        # self.env.addUserDebugLine(f_l_pos,
+        #                           target_f_l_pos,
+        #                           [1, 0, 0])
+        # self.env.addUserDebugLine(f_r_pos,
+        #                           target_f_r_pos,
+        #                           [1, 0, 0])
 
         # check if object ids are detected
         if collision_obj[0][0] == -1:
@@ -269,7 +347,7 @@ class RRTStar:
 
         if len(node_index) > 0:
             cost_list = [dist_list[i] + self.cost_from_root(self.vertex[i]) for i in node_index
-                         if not self.check_collision(self.vertex[i], self.goal_pos)]
+                         if not self.check_collision2(self.vertex[i], self.goal_pos)]
             return node_index[int(np.argmin(cost_list))]
 
         # ToDo: What to do if no vertex is near to the goal vertex?
@@ -314,7 +392,7 @@ class RRTStar:
     def move_robot_internal(self, target_location):
         dist = 100
         count = 0
-        while dist > 0.5:
+        while dist > 0.2:
             count += 1
             # find Euclidean distance to target position
             current_pos, _ = self.env.getBasePositionAndOrientation(self.robot_id)
@@ -322,18 +400,121 @@ class RRTStar:
                            pow((target_location[1] - current_pos[1]), 2))
             self.env.stepSimulation()
 
+    def check_collision_from_current_pos(self, target_pos):
+        # shoot rays from both the front wheel to target to check collision
+        robot_pos, robot_orn = self.env.getBasePositionAndOrientation(self.robot_id)
+        f_l_rel_pos = self.env.getJointInfo(self.robot_id, 2)[14]
+        f_r_rel_pos = self.env.getJointInfo(self.robot_id, 3)[14]
+
+        # we can't check for a single ray because the wheels are spread out
+        # pad the robot by a small value to avoid going near obstacles
+        f_l_rel_pos = tuple(map(operator.mul, f_l_rel_pos, [2, 2, 0.0]))
+        f_r_rel_pos = tuple(map(operator.mul, f_r_rel_pos, [2, 2, 0.0]))
+
+        f_l_pos = tuple(map(operator.add, f_l_rel_pos, [robot_pos[0], robot_pos[1], 0.0]))
+        f_r_pos = tuple(map(operator.add, f_r_rel_pos, [robot_pos[0], robot_pos[1], 0.0]))
+        target_f_l_pos = tuple(map(operator.add, f_l_rel_pos, [target_pos[0], target_pos[1], 0.0]))
+        target_f_r_pos = tuple(map(operator.add, f_r_rel_pos, [target_pos[0], target_pos[1], 0.0]))
+
+        # shoot rays
+        collision_obj = self.env.rayTestBatch([f_l_pos, f_r_pos], [target_f_l_pos, target_f_r_pos])
+        self.env.addUserDebugLine(f_l_pos,
+                                  target_f_l_pos,
+                                  [1, 0, 0])
+        self.env.addUserDebugLine(f_r_pos,
+                                  target_f_r_pos,
+                                  [1, 0, 0])
+        # check if object ids are detected
+        if collision_obj[0][0] == -1:
+            # print("No collision")
+            return False
+        else:
+            # print("Collision")
+            return True
+
+    def find_wheel_coordinates(self, node_goal):
+
+        robot_pos, robot_orn = self.env.getBasePositionAndOrientation(self.robot_id)
+        node_start = Node(robot_pos[0], robot_pos[1])
+        node_goal = Node(node_goal[0], node_goal[1])
+        # shoot rays from both the front wheel to target to check collision
+        # robot_pos, robot_orn = p.getBasePositionAndOrientation(robot_id)
+        f_l_rel_pos = self.env.getJointInfo(self.robot_id, 2)[14]
+        f_r_rel_pos = self.env.getJointInfo(self.robot_id, 3)[14]
+
+        # we can't check for a single ray because the wheels are spread out
+        # pad the robot by a small value to avoid going near obstacles
+        # f_l_rel_pos = tuple(map(operator.mul, f_l_rel_pos, [2, 2, 0.0]))
+        # f_r_rel_pos = tuple(map(operator.mul, f_r_rel_pos, [2, 2, 0.0]))
+
+        _, theta = self.get_distance_and_angle(node_start, node_goal)
+        dist_between_wheels = f_l_rel_pos[1] - f_r_rel_pos[1]
+
+        dist = f_l_rel_pos[0]
+        node_new = Node(node_start.x + (dist * math.cos(theta)),
+                        node_start.y + (dist * math.sin(theta)))
+
+        a = (node_start.x, node_start.y)
+        b = (node_new.x, node_new.y)
+        cd_length = dist_between_wheels
+
+        ab = LineString([a, b])
+        left = ab.parallel_offset(cd_length / 2, 'left')
+        right = ab.parallel_offset(cd_length / 2, 'right')
+        c = left.boundary[1]
+        d = right.boundary[0]
+
+        f_l_pos = [c.x, c.y, 0.1]
+        f_r_pos = [d.x, d.y, 0.1]
+
+        ######################################### for target
+        node_new = Node(node_goal.x + (dist * math.cos(theta)),
+                        node_goal.y + (dist * math.sin(theta)))
+
+        a = (node_goal.x, node_goal.y)
+        b = (node_new.x, node_new.y)
+        cd_length = dist_between_wheels
+
+        ab = LineString([a, b])
+        left = ab.parallel_offset(cd_length / 2, 'left')
+        right = ab.parallel_offset(cd_length / 2, 'right')
+        c = left.boundary[1]
+        d = right.boundary[0]
+
+        target_f_l_pos = [c.x, c.y, 0.1]
+        target_f_r_pos = [d.x, d.y, 0.1]
+
+        # f_l_pos = tuple(map(operator.add, f_l_rel_pos, [node_nearest.x, node_nearest.y, 0.0]))
+        # f_r_pos = tuple(map(operator.add, f_r_rel_pos, [node_nearest.x, node_nearest.y, 0.0]))
+        #
+        # target_f_l_pos = tuple(map(operator.add, f_l_rel_pos, [node_new.x, node_new.y, 0.0]))
+        # target_f_r_pos = tuple(map(operator.add, f_r_rel_pos, [node_new.x, node_new.y, 0.0]))
+
+        # shoot rays
+        collision_obj = self.env.rayTestBatch([f_l_pos, f_r_pos], [target_f_l_pos, target_f_r_pos])
+        self.env.addUserDebugLine(f_l_pos,
+                                  target_f_l_pos,
+                                  [1, 0, 0])
+        self.env.addUserDebugLine(f_r_pos,
+                                  target_f_r_pos,
+                                  [1, 0, 0])
+
+        # check if object ids are detected
+        if collision_obj[0][0] == -1:
+            # print("No collision")
+            return False
+        else:
+            # print("Collision")
+            return True
+
     def move_robot_to_target(self, target_location):
         self.rotate_husky_to_face_target(target_location)
         # check collision should be called after rotating the husky
-        # collision = checkCollision(self.robot_id, target_location)
-        # if not collision:
-        #     setJointControlsOfHusky(self.robot_id)
-        #     moveRobotInternal(robot_id, target_location)
-        #     return True
-        # else:
-        #     # ToDO: Reset husky to original orientation?
-        #     print("Robot not moved. Path is in collision with obstacles")
-        #     return False
+        collision = self.find_wheel_coordinates(target_location)
+        if collision:
+            # ToDO: Reset husky to original orientation?
+            print("Robot not moved. Path is in collision with obstacles")
+            return False
         self.set_joint_controls_of_husky()
         self.move_robot_internal(target_location)
 
@@ -359,7 +540,7 @@ class RRTStar:
             node_nearest = self.nearest_neighbor(node_rand)
             node_new = self.new_state(node_nearest, node_rand)
 
-            if node_new and not self.check_collision(node_nearest, node_new):
+            if node_new and not self.check_collision2(node_nearest, node_new):
                 neighbor_index = self.find_near_neighbor(node_new)
                 self.vertex.append(node_new)
 
@@ -379,11 +560,14 @@ rrt_star = RRTStar(start_pos=[-12, -12],
                    step_len=4,
                    goal_sample_rate=0.002,
                    search_radius=5,
-                   iter_max=2000)
+                   iter_max=1000)
 
 rrt_star.setup_environment(True)
 path = rrt_star.planning()
+input("Press Enter to continue...")
 rrt_star.draw_path()
 print(path)
+input("Press Enter again to continue...")
 rrt_star.move_robot()
+input("Press Enter again to exit...")
 print("The end!")
