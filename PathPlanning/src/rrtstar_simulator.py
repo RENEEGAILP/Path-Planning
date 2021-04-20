@@ -26,10 +26,18 @@ class RRTStar:
         self.vertex = [self.start_pos]
         self.path = []
 
+        # constants
+        self.STEP_SIZE = 0.004
+        self.BOUNDARY_FACTOR = 1.5
+
+        # robot
+        self.robot_id = -1
+        self.f_l_wheel_rel_pos = -1
+        self.f_r_wheel_rel_pos = -1
+
         # environment
         self.x_range = (-15, 15)
         self.y_range = (-15, 15)
-        self.robot_id = -1
         self.obstacles = []
         self.env = None
 
@@ -37,12 +45,11 @@ class RRTStar:
         self.env.disconnect()
 
     def setup_environment(self, obstacles=True):
-
-        # creating the environment
+        # Creating and initializing the environment
         p.connect(p.GUI)
         p.loadURDF("../data/plane.urdf")
         p.setGravity(0, 0, -10)
-        p.setTimeStep(0.004)
+        p.setTimeStep(self.STEP_SIZE)
 
         if obstacles:
             self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [0, 10, 0], useFixedBase=1))
@@ -55,6 +62,8 @@ class RRTStar:
         husky_start_pos = [self.start_pos.x, self.start_pos.y, 0.1]
         self.robot_id \
             = p.loadURDF("../data/husky/husky.urdf", husky_start_pos)
+        self.f_l_wheel_rel_pos = p.getJointInfo(self.robot_id, 2)[14]
+        self.f_r_wheel_rel_pos = p.getJointInfo(self.robot_id, 3)[14]
 
         # Adjust the position of the camera
         p.resetDebugVisualizerCamera(cameraDistance=26, cameraYaw=-180, cameraPitch=-120,
@@ -62,7 +71,7 @@ class RRTStar:
         self.env = p
 
     def generate_random_node(self):
-
+        # returns a random sample node
         if np.random.random() > self.goal_sample_rate:
             return Node(np.random.uniform(self.x_range[0], self.x_range[1]),
                         np.random.uniform(self.y_range[0], self.y_range[1]))
@@ -70,6 +79,7 @@ class RRTStar:
             return self.goal_pos
 
     def nearest_neighbor(self, rand_node):
+        # Returns the nearest neighbor to rand_node from the list of existing vertices
         return self.vertex[int(np.argmin([math.hypot(nd.x - rand_node.x, nd.y - rand_node.y)
                                           for nd in self.vertex]))]
 
@@ -79,6 +89,7 @@ class RRTStar:
         return math.hypot(dx, dy), math.atan2(dy, dx)
 
     def new_state(self, node_start, node_goal):
+        # Returns a node along the path of start and goal which has the shortest possible distance to start
         dist, theta = self.get_distance_and_angle(node_start, node_goal)
 
         dist = min(self.step_len, dist)
@@ -89,10 +100,9 @@ class RRTStar:
 
         return node_new
 
-    # returns a list of indexes of vertex that are in the search radius and has no collision to node_new
     def find_near_neighbor(self, node_new):
+        # returns a list of indexes of vertex that are in the search radius and has no collision to node_new
         n = len(self.vertex) + 1
-        # ToDo: figure out equation for r
         r = min(self.search_radius * math.sqrt((math.log(n) / n)), self.step_len)
 
         dist_table = [math.hypot(nd.x - node_new.x, nd.y - node_new.y) for nd in self.vertex]
@@ -101,64 +111,41 @@ class RRTStar:
 
         return dist_table_index
 
-    def check_collision(self, node_start, node_goal, print_debug_lines=False):
+    def get_wheel_position(self, wheel_node, theta):
+        dist_between_wheels = (self.f_l_wheel_rel_pos[1] - self.f_r_wheel_rel_pos[1]) * self.BOUNDARY_FACTOR
+        dist = self.f_l_wheel_rel_pos[0]
+        node_new = Node(wheel_node.x + (dist * math.cos(theta)),
+                        wheel_node.y + (dist * math.sin(theta)))
 
-        # shoot rays from both the front wheel to target to check collision
-        # robot_pos, robot_orn = p.getBasePositionAndOrientation(robot_id)
-        f_l_rel_pos = self.env.getJointInfo(self.robot_id, 2)[14]
-        f_r_rel_pos = self.env.getJointInfo(self.robot_id, 3)[14]
-
-        # we can't check for a single ray because the wheels are spread out
-        # pad the robot by a small value to avoid going near obstacles
-
-        _, theta = self.get_distance_and_angle(node_start, node_goal)
-        dist_between_wheels = (f_l_rel_pos[1] - f_r_rel_pos[1]) * 2
-
-        dist = f_l_rel_pos[0]
-        node_new = Node(node_start.x + (dist * math.cos(theta)),
-                        node_start.y + (dist * math.sin(theta)))
-
-        a = (node_start.x, node_start.y)
+        a = (wheel_node.x, wheel_node.y)
         b = (node_new.x, node_new.y)
-        cd_length = dist_between_wheels
-
         ab = LineString([a, b])
-        left = ab.parallel_offset(cd_length / 2, 'left')
-        right = ab.parallel_offset(cd_length / 2, 'right')
+        left = ab.parallel_offset(dist_between_wheels / 2, 'left')
+        right = ab.parallel_offset(dist_between_wheels / 2, 'right')
         c = left.boundary[1]
         d = right.boundary[0]
-
         f_l_pos = [c.x, c.y, 0.25]
         f_r_pos = [d.x, d.y, 0.25]
+        return [f_l_pos, f_r_pos]
 
-        ######################################### for target
-        node_new = Node(node_goal.x + (dist * math.cos(theta)),
-                        node_goal.y + (dist * math.sin(theta)))
+    def check_collision(self, node_start, node_goal, print_debug_lines=False):
+        # shoot rays from both the front wheel to target to check collision
 
-        a = (node_goal.x, node_goal.y)
-        b = (node_new.x, node_new.y)
-        cd_length = dist_between_wheels
-
-        ab = LineString([a, b])
-        left = ab.parallel_offset(cd_length / 2, 'left')
-        right = ab.parallel_offset(cd_length / 2, 'right')
-        c = left.boundary[1]
-        d = right.boundary[0]
-
-        target_f_l_pos = [c.x, c.y, 0.25]
-        target_f_r_pos = [d.x, d.y, 0.25]
+        _, theta = self.get_distance_and_angle(node_start, node_goal)
+        start_wheel_pos = self.get_wheel_position(node_start, theta)
+        target_wheel_pos = self.get_wheel_position(node_goal, theta)
 
         if print_debug_lines:
-            self.env.addUserDebugLine(f_l_pos,
-                                      target_f_l_pos,
+            self.env.addUserDebugLine(start_wheel_pos[0],
+                                      target_wheel_pos[0],
                                       [1, 0, 0])
-            self.env.addUserDebugLine(f_r_pos,
-                                      target_f_r_pos,
+            self.env.addUserDebugLine(start_wheel_pos[1],
+                                      target_wheel_pos[1],
                                       [1, 0, 0])
 
         # shoot rays
-        collision_f_l = self.env.rayTest(f_l_pos, target_f_l_pos)
-        collision_f_r = self.env.rayTest(f_r_pos, target_f_r_pos)
+        collision_f_l = self.env.rayTest(start_wheel_pos[0], target_wheel_pos[0])
+        collision_f_r = self.env.rayTest(start_wheel_pos[1], target_wheel_pos[1])
 
         # check if object ids are detected
         if collision_f_l[0][0] == -1 and collision_f_r[0][0] == -1:
@@ -168,40 +155,39 @@ class RRTStar:
             # print("Collision")
             return True
 
-    # calculate the cost from the root to the node_p by traversing its parents
     def cost_from_root(self, node_p):
+        # Returns the cost from the root to the node_p by traversing its parents
         node = node_p
         cost = 0.0
-
         while node.parent:
             cost += math.hypot(node.x - node.parent.x, node.y - node.parent.y)
             node = node.parent
-
         return cost
 
     def get_new_cost(self, node_start, node_end):
+        # Returns cost from root to node_end
         dist, _ = self.get_distance_and_angle(node_start, node_end)
         return self.cost_from_root(node_start) + dist
 
-    # check is node_new can be reached from any other neighbour within search index with a lower cost
-    # and update the parent
     def choose_parent(self, node_new, neighbor_index):
+        # check if node_new can be reached from any other neighbour within search index with a lower cost
+        # and update the parent
         cost = [self.get_new_cost(self.vertex[i], node_new) for i in neighbor_index]
         cost_min_index = neighbor_index[int(np.argmin(cost))]
         node_new.parent = self.vertex[cost_min_index]
 
-    # if any of the neighbour can be reached from node_new with a lower cost, then update the
-    # parent of the neighbour
     def rewire(self, node_new, neighbor_index):
+        # if any of the neighbour can be reached from node_new with a lower cost, then update the
+        # parent of the neighbour
         for i in neighbor_index:
             node_neighbor = self.vertex[i]
 
             if self.cost_from_root(node_neighbor) > self.get_new_cost(node_new, node_neighbor):
                 node_neighbor.parent = node_new
 
-    # searches for the closest vertex from the existing list of vertex whose distance is
-    # less than the step_len to the goal and set this vertex as the parent of the goal
     def search_goal_parent(self):
+        # searches for the closest vertex from the existing list of vertex whose distance is
+        # less than the step_len to the goal and set this vertex as the parent of the goal
         dist_list = [math.hypot(n.x - self.goal_pos.x, n.y - self.goal_pos.y) for n in self.vertex]
         node_index = [i for i in range(len(dist_list)) if dist_list[i] <= self.step_len]
 
@@ -213,17 +199,17 @@ class RRTStar:
         # ToDo: What to do if no vertex is near to the goal vertex?
         return len(self.vertex) - 1
 
-    # traverse back to the root to find the path to the goal
     def extract_path(self, node_end):
-        path = [[self.goal_pos.x, self.goal_pos.y]]
+        # traverse back to the root to find the path to the goal
+        planned_path = [[self.goal_pos.x, self.goal_pos.y]]
         node = node_end
 
         while node.parent is not None:
-            path.append([node.x, node.y])
+            planned_path.append([node.x, node.y])
             node = node.parent
-        path.append([node.x, node.y])
+        planned_path.append([node.x, node.y])
 
-        return path
+        return planned_path
 
     def rotate_husky_to_face_target(self, target_location):
         # calculate new orientation and reset the robots
@@ -319,7 +305,7 @@ rrt_star = RRTStar(start_pos=[-12, 12],
                    goal_pos=[12, -12],
                    step_len=1,
                    goal_sample_rate=0.002,
-                   search_radius=5,
+                   search_radius=12,
                    iter_max=5000)
 
 rrt_star.setup_environment(True)
