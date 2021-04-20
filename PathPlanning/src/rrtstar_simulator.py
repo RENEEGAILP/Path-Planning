@@ -40,6 +40,7 @@ class RRTStar:
         self.y_range = (-15, 15)
         self.obstacles = []
         self.env = None
+        self.tree_debug_lines = {}
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.env.disconnect()
@@ -183,7 +184,15 @@ class RRTStar:
             node_neighbor = self.vertex[i]
 
             if self.cost_from_root(node_neighbor) > self.get_new_cost(node_new, node_neighbor):
+                debug_id = self.tree_debug_lines[
+                    ((node_neighbor.x, node_neighbor.y), (node_neighbor.parent.x, node_neighbor.parent.y))]
+                self.env.removeUserDebugItem(debug_id)
                 node_neighbor.parent = node_new
+                self.tree_debug_lines[
+                    ((node_neighbor.x, node_neighbor.y), (node_neighbor.parent.x, node_neighbor.parent.y))] = \
+                    self.env.addUserDebugLine([node_neighbor.x, node_neighbor.y, 0.1],
+                                              [node_neighbor.parent.x, node_neighbor.parent.y, 0.1],
+                                              [0, 0, 1])
 
     def search_goal_parent(self):
         # searches for the closest vertex from the existing list of vertex whose distance is
@@ -288,11 +297,14 @@ class RRTStar:
 
             if node_new and not self.check_collision(node_nearest, node_new):
                 neighbor_index = self.find_near_neighbor(node_new)
-                self.vertex.append(node_new)
-
                 # check is node_new can be reached from any other neighbour within search index with a lower cost
                 if neighbor_index:
+                    self.vertex.append(node_new)
                     self.choose_parent(node_new, neighbor_index)
+                    self.tree_debug_lines[((node_new.x, node_new.y), (node_new.parent.x, node_new.parent.y))] = \
+                        self.env.addUserDebugLine([node_new.x, node_new.y, 0.1],
+                                                  [node_new.parent.x, node_new.parent.y, 0.1],
+                                                  [0, 0, 1])
                     self.rewire(node_new, neighbor_index)
 
         index = self.search_goal_parent()
