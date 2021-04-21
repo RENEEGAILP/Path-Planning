@@ -11,6 +11,7 @@ class Node:
         self.y = y
         self.parent = None
 
+
 class RRTStarDynamic:
 
     def __init__(self, start_pos, goal_pos, step_len,
@@ -36,9 +37,15 @@ class RRTStarDynamic:
 
         # obstacles
         self.obstacles = []
-        self.obs_current_target = -12
-        self.obs_target_vel = -15
-        self.dynamic_obstacle_id = -1
+
+        # dynamic obstacles
+        self.obs_current_target_1 = -12
+        self.obs_target_vel_1 = -15
+        self.dynamic_obstacle_id_1 = -1
+
+        self.obs_current_target_2 = 12
+        self.obs_target_vel_2 = 15
+        self.dynamic_obstacle_id_2 = -1
 
         # environment
         self.x_range = (-15, 15)
@@ -56,8 +63,21 @@ class RRTStarDynamic:
         self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, 10, 0], useFixedBase=1))
 
     def setup_dynamic_obstacles(self):
-        self.dynamic_obstacle_id = p.loadURDF("../data/husky/husky.urdf",[0,0,0])
-        self.obstacles.append(self.dynamic_obstacle_id)
+        self.dynamic_obstacle_id_1 = p.loadURDF("../data/husky/husky.urdf", [12, 0, 0])
+
+        self.dynamic_obstacle_id_2 = p.loadURDF("../data/husky/husky.urdf", [0, 0, 0])
+
+        obs_pos, obs_orn = p.getBasePositionAndOrientation(self.dynamic_obstacle_id_2)
+        (roll, pitch, theta) = p.getEulerFromQuaternion(obs_orn)
+        # calculate how much the robot has to rotate to face the target
+        angle_to_goal = np.arctan2(12 - obs_pos[1], 0 - obs_pos[0])
+        # restrict angle to (-pi,pi)
+        angle_to_goal = ((angle_to_goal + np.pi) % (2.0 * np.pi)) - np.pi
+
+        quaternion = p.getQuaternionFromEuler([roll, pitch, angle_to_goal])
+        p.resetBasePositionAndOrientation(self.dynamic_obstacle_id_2, obs_pos, quaternion)
+        self.obstacles.append(self.dynamic_obstacle_id_1)
+        self.obstacles.append(self.dynamic_obstacle_id_2)
 
     def setup_environment(self, obstacles=True):
         # Creating and initializing the environment
@@ -255,11 +275,11 @@ class RRTStarDynamic:
         for joint in range(2, 6):
             self.env.setJointMotorControl(self.robot_id, joint, p.VELOCITY_CONTROL, target_vel, max_force)
 
-    def set_joint_controls_of_obstacle(self, target_vel):
+    def set_joint_controls_of_obstacle(self, obs_id,target_vel):
         # target_vel = -10  # rad/s
         max_force = 100  # Newton
         for joint in range(2, 6):
-            self.env.setJointMotorControl(self.dynamic_obstacle_id, joint, p.VELOCITY_CONTROL, target_vel, max_force)
+            self.env.setJointMotorControl(obs_id, joint, p.VELOCITY_CONTROL, target_vel, max_force)
 
     def move_robot_internal(self, target_location):
         dist = 100
@@ -355,15 +375,25 @@ class RRTStarDynamic:
             self.env.removeUserDebugItem(id)
 
     def move_obstacles(self):
-        obs_pos, obs_orn = self.env.getBasePositionAndOrientation(self.dynamic_obstacle_id)
-        if abs(obs_pos[0] - self.obs_current_target) < 1:
-            print("HHH")
-            self.obs_current_target = -self.obs_current_target
-            self.obs_target_vel = -self.obs_target_vel
-            self.set_joint_controls_of_obstacle(self.obs_target_vel)
-        else:
-            self.set_joint_controls_of_obstacle(self.obs_target_vel)
 
+        # obstacle 1
+        obs_pos, obs_orn = self.env.getBasePositionAndOrientation(self.dynamic_obstacle_id_1)
+        if abs(obs_pos[0] - self.obs_current_target_1) < 1:
+            # print("HHH")
+            self.obs_current_target_1 = -self.obs_current_target_1
+            self.obs_target_vel_1 = -self.obs_target_vel_1
+            self.set_joint_controls_of_obstacle(self.dynamic_obstacle_id_1,self.obs_target_vel_1)
+        else:
+            self.set_joint_controls_of_obstacle(self.dynamic_obstacle_id_1,self.obs_target_vel_1)
+
+        obs_pos, obs_orn = self.env.getBasePositionAndOrientation(self.dynamic_obstacle_id_2)
+        if abs(obs_pos[1] - self.obs_current_target_2) < 1:
+            # print("HHH")
+            self.obs_current_target_2 = -self.obs_current_target_2
+            self.obs_target_vel_2 = -self.obs_target_vel_2
+            self.set_joint_controls_of_obstacle(self.dynamic_obstacle_id_2, self.obs_target_vel_2)
+        else:
+            self.set_joint_controls_of_obstacle(self.dynamic_obstacle_id_2, self.obs_target_vel_2)
     def start_simulation(self):
         while self.path:
             if not self.check_collision_on_path():
