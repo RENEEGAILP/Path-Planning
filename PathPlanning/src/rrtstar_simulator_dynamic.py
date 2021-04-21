@@ -39,6 +39,7 @@ class RRTStar:
         self.x_range = (-15, 15)
         self.y_range = (-15, 15)
         self.obstacles = []
+        self.dynamic_obstacle_id = -1
         self.env = None
         self.tree_debug_lines = {}
 
@@ -53,11 +54,16 @@ class RRTStar:
         p.setTimeStep(self.STEP_SIZE)
 
         if obstacles:
-            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [0, 10, 0], useFixedBase=1))
+            # self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [0, 10, 0], useFixedBase=1))
             self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-5, -10, 0], useFixedBase=1))
             self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, -10, 0], useFixedBase=1))
-            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-5, 0, 0], useFixedBase=1))
-            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, 0, 0], useFixedBase=1))
+            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-5, 10, 0], useFixedBase=1))
+            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, 10, 0], useFixedBase=1))
+
+            self.dynamic_obstacle_id = p.loadURDF("../data/husky/husky.urdf", [0, 0, 0.1])
+            self.obstacles.append(self.dynamic_obstacle_id)
+            #for joint in range(2, 6):
+            #    p.setJointMotorControl2(self.dynamic_obstacle_id, joint, p.VELOCITY_CONTROL, 10, 100)
 
         # initializing the robot
         husky_start_pos = [self.start_pos.x, self.start_pos.y, 0.1]
@@ -328,29 +334,33 @@ class RRTStar:
         return self.path
 
     def move_obstacle(self):
+        for joint in range(2, 6):
+            self.env.setJointMotorControl2(self.dynamic_obstacle_id, joint, p.VELOCITY_CONTROL, 10, 100)
+        for i in range(1000):
+            self.env.stepSimulation()
         print("H")
 
     def check_collision_on_path(self):
-        for i in range(min(len(self.path) - 1,5)):
+        for i in range(min(len(self.path) - 1, 5)):
             id = self.env.addUserDebugLine(
-                [self.path[i][0], self.path[i][1],0.1],
-                [self.path[i + 1][0], self.path[i+1][1],0.1],[1,0,0],10)
+                [self.path[i][0], self.path[i][1], 0.1],
+                [self.path[i + 1][0], self.path[i + 1][1], 0.1], [1, 0, 0], 10)
             if self.check_collision(Node(self.path[i][0], self.path[i][1]),
-                                    Node(self.path[i + 1][0], self.path[i+1][1])):
+                                    Node(self.path[i + 1][0], self.path[i + 1][1])):
                 return True
             self.env.removeUserDebugItem(id)
 
     def start_simulation(self):
         while self.path:
             if not self.check_collision_on_path():
-                self.move_robot_to_target(self.path[0])
                 self.move_obstacle()
+                self.move_robot_to_target(self.path[0])
                 self.path.remove(self.path[0])
             else:
                 self.re_planning()
 
 
-rrt_star = RRTStar(start_pos=[-12,12],
+rrt_star = RRTStar(start_pos=[-12, 12],
                    goal_pos=[12, -12],
                    step_len=1,
                    goal_sample_rate=0.002,
@@ -364,7 +374,7 @@ rrt_star.draw_path()
 print(path)
 # input("Press Enter again to continue...")
 # path.reverse()
-rrt_star.obstacles.append(p.loadURDF("../data/obstacle_2.urdf", [0,0, 0], useFixedBase=1))
+#rrt_star.obstacles.append(p.loadURDF("../data/obstacle_2.urdf", [0, 0, 0], useFixedBase=1))
 rrt_star.start_simulation()
 input("Press Enter again to exit...")
 print("The end!")
