@@ -12,7 +12,7 @@ class Node:
         self.parent = None
 
 
-class RRTStar:
+class RRTStarDynamic:
 
     def __init__(self, start_pos, goal_pos, step_len,
                  goal_sample_rate, search_radius, iter_max):
@@ -59,11 +59,9 @@ class RRTStar:
             self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, -10, 0], useFixedBase=1))
             self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-5, 10, 0], useFixedBase=1))
             self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, 10, 0], useFixedBase=1))
-
             self.dynamic_obstacle_id = p.loadURDF("../data/husky/husky.urdf", [0, 0, 0.1])
             self.obstacles.append(self.dynamic_obstacle_id)
-            #for joint in range(2, 6):
-            #    p.setJointMotorControl2(self.dynamic_obstacle_id, joint, p.VELOCITY_CONTROL, 10, 100)
+
 
         # initializing the robot
         husky_start_pos = [self.start_pos.x, self.start_pos.y, 0.1]
@@ -250,6 +248,12 @@ class RRTStar:
         for joint in range(2, 6):
             self.env.setJointMotorControl(self.robot_id, joint, p.VELOCITY_CONTROL, target_vel, max_force)
 
+    def set_joint_controls_of_obstacle(self):
+        target_vel = 10  # rad/s
+        max_force = 100  # Newton
+        for joint in range(2, 6):
+            self.env.setJointMotorControl(self.dynamic_obstacle_id, joint, p.VELOCITY_CONTROL, target_vel, max_force)
+
     def move_robot_internal(self, target_location):
         dist = 100
         count = 0
@@ -290,6 +294,7 @@ class RRTStar:
         #    self.re_planning()
         #    return  False
         self.set_joint_controls_of_husky()
+        self.set_joint_controls_of_obstacle()
         self.move_robot_internal(target_location)
         # return True
 
@@ -333,13 +338,6 @@ class RRTStar:
         self.path.reverse()
         return self.path
 
-    def move_obstacle(self):
-        for joint in range(2, 6):
-            self.env.setJointMotorControl2(self.dynamic_obstacle_id, joint, p.VELOCITY_CONTROL, 10, 100)
-        for i in range(1000):
-            self.env.stepSimulation()
-        print("H")
-
     def check_collision_on_path(self):
         for i in range(min(len(self.path) - 1, 5)):
             id = self.env.addUserDebugLine(
@@ -353,28 +351,27 @@ class RRTStar:
     def start_simulation(self):
         while self.path:
             if not self.check_collision_on_path():
-                self.move_obstacle()
                 self.move_robot_to_target(self.path[0])
                 self.path.remove(self.path[0])
             else:
                 self.re_planning()
 
 
-rrt_star = RRTStar(start_pos=[-12, 12],
+rrt_star_dynamic = RRTStarDynamic(start_pos=[-12, 12],
                    goal_pos=[12, -12],
                    step_len=1,
                    goal_sample_rate=0.002,
                    search_radius=12,
                    iter_max=1000)
 
-rrt_star.setup_environment(True)
-path = rrt_star.planning()
+rrt_star_dynamic.setup_environment(True)
+path = rrt_star_dynamic.planning()
 # input("Press Enter to continue...")
-rrt_star.draw_path()
+rrt_star_dynamic.draw_path()
 print(path)
 # input("Press Enter again to continue...")
 # path.reverse()
 #rrt_star.obstacles.append(p.loadURDF("../data/obstacle_2.urdf", [0, 0, 0], useFixedBase=1))
-rrt_star.start_simulation()
+rrt_star_dynamic.start_simulation()
 input("Press Enter again to exit...")
 print("The end!")
