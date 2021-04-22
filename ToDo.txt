@@ -1,0 +1,10 @@
+remove shadow
+
+
+
+doubts:
+
+RRT* on pybullet simulator?
+
+Controls for robot?
+Just setting orientation and velocity and stepping the simulation
