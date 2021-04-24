@@ -1,3 +1,5 @@
+from time import sleep
+
 import pybullet as p
 import numpy as np
 import operator
@@ -53,11 +55,14 @@ class RRTStar:
         p.setTimeStep(self.STEP_SIZE)
 
         if obstacles:
-            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [0, 10, 0], useFixedBase=1))
-            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-5, -10, 0], useFixedBase=1))
-            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, -10, 0], useFixedBase=1))
-            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-5, 0, 0], useFixedBase=1))
-            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, 0, 0], useFixedBase=1))
+            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-4, -6, 0], useFixedBase=1))
+            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [4, -8, 0], useFixedBase=1))
+            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-4, 8, 0], useFixedBase=1))
+            self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [4, 6, 0], useFixedBase=1))
+            self.obstacles.append(p.loadURDF("../data/obstacle_2.urdf", [4, -1, 0], useFixedBase=1))
+            self.obstacles.append(p.loadURDF("../data/obstacle_2.urdf", [-10, -8, 0], useFixedBase=1))
+            self.obstacles.append(p.loadURDF("../data/obstacle_3.urdf", [10, 1, 0], useFixedBase=1))
+            self.obstacles.append(p.loadURDF("../data/obstacle_4.urdf", [-6, 0, 0], useFixedBase=1))
 
         # initializing the robot
         husky_start_pos = [self.start_pos.x, self.start_pos.y, 0.1]
@@ -67,8 +72,9 @@ class RRTStar:
         self.f_r_wheel_rel_pos = p.getJointInfo(self.robot_id, 3)[14]
 
         # Adjust the position of the camera
-        p.resetDebugVisualizerCamera(cameraDistance=26, cameraYaw=-180, cameraPitch=-120,
+        p.resetDebugVisualizerCamera(cameraDistance=18, cameraYaw=-180, cameraPitch=-91,
                                      cameraTargetPosition=[0, 0, 0])
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         self.env = p
 
     def generate_random_node(self):
@@ -283,7 +289,8 @@ class RRTStar:
         for i in range(1, len(self.path)):
             self.env.addUserDebugLine(path_3d[i - 1],
                                       path_3d[i],
-                                      [0, 0, 0])
+                                      [0, 0, 0],
+                                      5)
 
     def planning(self):
         for k in range(self.iter_max):
@@ -321,11 +328,12 @@ rrt_star = RRTStar(start_pos=[-12, 12],
                    iter_max=5000)
 
 rrt_star.setup_environment(True)
+sleep(3)
 path = rrt_star.planning()
-# input("Press Enter to continue...")
+input("Press Enter to continue...")
 rrt_star.draw_path()
 print(path)
-# input("Press Enter again to continue...")
+input("Press Enter again to continue...")
 rrt_star.move_robot()
 input("Press Enter again to exit...")
 print("The end!")
