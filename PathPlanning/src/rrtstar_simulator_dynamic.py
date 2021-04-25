@@ -1,8 +1,12 @@
+from time import sleep
+import time
 import pybullet as p
 import numpy as np
 import operator
 import math
 from shapely.geometry import LineString
+
+start_time = time.time()
 
 
 class Node:
@@ -40,11 +44,11 @@ class RRTStarDynamic:
 
         # dynamic obstacles
         self.obs_current_target_1 = -12
-        self.obs_target_vel_1 = -15
+        self.obs_target_vel_1 = -10
         self.dynamic_obstacle_id_1 = -1
 
         self.obs_current_target_2 = 12
-        self.obs_target_vel_2 = 15
+        self.obs_target_vel_2 = 10
         self.dynamic_obstacle_id_2 = -1
 
         # environment
@@ -57,10 +61,12 @@ class RRTStarDynamic:
         self.env.disconnect()
 
     def setup_static_obstacles(self):
-        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-5, -10, 0], useFixedBase=1))
-        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, -10, 0], useFixedBase=1))
-        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-5, 10, 0], useFixedBase=1))
-        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, 10, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-4, -6, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [4, -8, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-4, 8, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [4, 6, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle_2.urdf", [12, 2, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle_3.urdf", [-12, 2, 0], useFixedBase=1))
 
     def setup_dynamic_obstacles(self):
         self.dynamic_obstacle_id_1 = p.loadURDF("../data/husky/husky.urdf", [12, 0, 0])
@@ -98,8 +104,10 @@ class RRTStarDynamic:
         self.f_r_wheel_rel_pos = p.getJointInfo(self.robot_id, 3)[14]
 
         # Adjust the position of the camera
-        p.resetDebugVisualizerCamera(cameraDistance=26, cameraYaw=-180, cameraPitch=-120,
+        p.resetDebugVisualizerCamera(cameraDistance=18, cameraYaw=-180, cameraPitch=-92,
                                      cameraTargetPosition=[0, 0, 0])
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+
         self.env = p
 
     def generate_random_node(self):
@@ -275,7 +283,7 @@ class RRTStarDynamic:
         for joint in range(2, 6):
             self.env.setJointMotorControl(self.robot_id, joint, p.VELOCITY_CONTROL, target_vel, max_force)
 
-    def set_joint_controls_of_obstacle(self, obs_id,target_vel):
+    def set_joint_controls_of_obstacle(self, obs_id, target_vel):
         # target_vel = -10  # rad/s
         max_force = 100  # Newton
         for joint in range(2, 6):
@@ -305,28 +313,15 @@ class RRTStarDynamic:
         self.start_pos = node_start
         self.path = []
         self.vertex = [self.start_pos]
-        self.iter_max = 1000
+        self.iter_max = 5000
         self.env.removeAllUserDebugItems()
         self.tree_debug_lines = {}
         self.planning()
 
     def move_robot_to_target(self, target_location):
         self.rotate_husky_to_face_target(target_location)
-        # check collision should be called after rotating the husky
-        # collision = self.check_collision_from_current_pos(target_location)
-        # if collision:
-        # ToDO: Reset husky to original orientation?
-        #    print("Robot not moved. Path is in collision with obstacles")
-        # return False
-        #    self.re_planning()
-        #    return  False
         self.set_joint_controls_of_husky()
         self.move_robot_internal(target_location)
-        # return True
-
-    # def move_robot(self):
-    #     for position in reversed(self.path):
-    #         self.move_robot_to_target(position)
 
     def draw_path(self):
 
@@ -334,7 +329,8 @@ class RRTStarDynamic:
         for i in range(1, len(self.path)):
             self.env.addUserDebugLine(path_3d[i - 1],
                                       path_3d[i],
-                                      [0, 0, 0])
+                                      [0, 0, 0],
+                                      5)
 
     def planning(self):
         for k in range(self.iter_max):
@@ -360,7 +356,6 @@ class RRTStarDynamic:
 
         index = self.search_goal_parent()
         self.path = self.extract_path(self.vertex[index])
-        # self.move_robot()
         self.path.reverse()
         return self.path
 
@@ -382,9 +377,9 @@ class RRTStarDynamic:
             # print("HHH")
             self.obs_current_target_1 = -self.obs_current_target_1
             self.obs_target_vel_1 = -self.obs_target_vel_1
-            self.set_joint_controls_of_obstacle(self.dynamic_obstacle_id_1,self.obs_target_vel_1)
+            self.set_joint_controls_of_obstacle(self.dynamic_obstacle_id_1, self.obs_target_vel_1)
         else:
-            self.set_joint_controls_of_obstacle(self.dynamic_obstacle_id_1,self.obs_target_vel_1)
+            self.set_joint_controls_of_obstacle(self.dynamic_obstacle_id_1, self.obs_target_vel_1)
 
         obs_pos, obs_orn = self.env.getBasePositionAndOrientation(self.dynamic_obstacle_id_2)
         if abs(obs_pos[1] - self.obs_current_target_2) < 1:
@@ -394,6 +389,7 @@ class RRTStarDynamic:
             self.set_joint_controls_of_obstacle(self.dynamic_obstacle_id_2, self.obs_target_vel_2)
         else:
             self.set_joint_controls_of_obstacle(self.dynamic_obstacle_id_2, self.obs_target_vel_2)
+
     def start_simulation(self):
         while self.path:
             if not self.check_collision_on_path():
@@ -402,6 +398,7 @@ class RRTStarDynamic:
                 self.path.remove(self.path[0])
             else:
                 self.re_planning()
+                self.draw_path()
 
 
 rrt_star_dynamic = RRTStarDynamic(start_pos=[-12, 12],
@@ -409,16 +406,16 @@ rrt_star_dynamic = RRTStarDynamic(start_pos=[-12, 12],
                                   step_len=1,
                                   goal_sample_rate=0.002,
                                   search_radius=12,
-                                  iter_max=1000)
+                                  iter_max=5000)
 
 rrt_star_dynamic.setup_environment(True)
+sleep(3)
 path = rrt_star_dynamic.planning()
 # input("Press Enter to continue...")
 rrt_star_dynamic.draw_path()
 print(path)
 # input("Press Enter again to continue...")
-# path.reverse()
-# rrt_star.obstacles.append(p.loadURDF("../data/obstacle_2.urdf", [0, 0, 0], useFixedBase=1))
 rrt_star_dynamic.start_simulation()
+print("--- %s seconds ---" % (time.time() - start_time))
 input("Press Enter again to exit...")
 print("The end!")
