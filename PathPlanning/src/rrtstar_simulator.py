@@ -2,7 +2,6 @@ from time import sleep
 
 import pybullet as p
 import numpy as np
-import operator
 import math
 from shapely.geometry import LineString
 
@@ -27,6 +26,7 @@ class RRTStar:
         self.iter_max = iter_max
         self.vertex = [self.start_pos]
         self.path = []
+        self.node_path = []
 
         # constants
         self.STEP_SIZE = 0.004
@@ -221,8 +221,10 @@ class RRTStar:
 
         while node.parent is not None:
             planned_path.append([node.x, node.y])
+            self.node_path.append(node)
             node = node.parent
         planned_path.append([node.x, node.y])
+        self.node_path.append(node)
 
         return planned_path
 
@@ -316,7 +318,6 @@ class RRTStar:
 
         index = self.search_goal_parent()
         self.path = self.extract_path(self.vertex[index])
-        # self.move_robot()
         return self.path
 
 
@@ -333,6 +334,7 @@ path = rrt_star.planning()
 input("Press Enter to continue...")
 rrt_star.draw_path()
 print(path)
+print(rrt_star.cost_from_root(rrt_star.node_path[0]))
 input("Press Enter again to continue...")
 rrt_star.move_robot()
 input("Press Enter again to exit...")
