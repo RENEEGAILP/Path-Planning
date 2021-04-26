@@ -16,7 +16,7 @@ class Node:
         self.parent = None
 
 
-class RRTStarDynamic:
+class ModifiedRRTStar:
 
     def __init__(self, start_pos, goal_pos, step_len,
                  goal_sample_rate, search_radius, iter_max):
@@ -401,12 +401,12 @@ class RRTStarDynamic:
                 self.draw_path()
 
 
-rrt_star_dynamic = RRTStarDynamic(start_pos=[-12, 12],
-                                  goal_pos=[12, -12],
-                                  step_len=1,
-                                  goal_sample_rate=0.002,
-                                  search_radius=12,
-                                  iter_max=5000)
+rrt_star_dynamic = ModifiedRRTStar(start_pos=[-12, 12],
+                                   goal_pos=[12, -12],
+                                   step_len=1,
+                                   goal_sample_rate=0.002,
+                                   search_radius=12,
+                                   iter_max=5000)
 
 rrt_star_dynamic.setup_environment(True)
 sleep(3)
