@@ -1,10 +1,13 @@
 import copy
-
+from time import sleep
+import time
 import pybullet as p
 import numpy as np
 import operator
 import math
 from shapely.geometry import LineString
+
+start_time = time.time()
 
 
 class Node:
@@ -22,7 +25,7 @@ class Edge:
         self.is_valid = True
 
 
-class RRTStarDynamic:
+class DynamicRRT:
 
     def __init__(self, start_pos, goal_pos, step_len,
                  goal_sample_rate, waypoint_sample_rate, search_radius, iter_max):
@@ -67,15 +70,18 @@ class RRTStarDynamic:
         self.y_range = (-15, 15)
         self.env = None
         self.tree_debug_lines = {}
+        self.path_debug_id = []
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.env.disconnect()
 
     def setup_static_obstacles(self):
-        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-5, -10, 0], useFixedBase=1))
-        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, -10, 0], useFixedBase=1))
-        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-5, 10, 0], useFixedBase=1))
-        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [5, 10, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-4, -6, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [4, -8, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [-4, 8, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle.urdf", [4, 6, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle_2.urdf", [12, 2, 0], useFixedBase=1))
+        self.obstacles.append(p.loadURDF("../data/obstacle_3.urdf", [-12, 2, 0], useFixedBase=1))
 
     def setup_dynamic_obstacles(self):
         self.dynamic_obstacle_id_1 = p.loadURDF("../data/husky/husky.urdf", [12, 0, 0])
@@ -113,8 +119,9 @@ class RRTStarDynamic:
         self.f_r_wheel_rel_pos = p.getJointInfo(self.robot_id, 3)[14]
 
         # Adjust the position of the camera
-        p.resetDebugVisualizerCamera(cameraDistance=26, cameraYaw=-180, cameraPitch=-120,
+        p.resetDebugVisualizerCamera(cameraDistance=18, cameraYaw=-180, cameraPitch=-92,
                                      cameraTargetPosition=[0, 0, 0])
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         self.env = p
 
     def generate_random_node(self):
@@ -285,7 +292,7 @@ class RRTStarDynamic:
         # for joint in range(numJoints):
         #     print(p.getJointInfo(robot_id, joint))
 
-        target_vel = 10  # rad/s
+        target_vel = 5  # rad/s
         max_force = 100  # Newton
         for joint in range(2, 6):
             self.env.setJointMotorControl(self.robot_id, joint, p.VELOCITY_CONTROL, target_vel, max_force)
@@ -320,7 +327,7 @@ class RRTStarDynamic:
         self.start_pos = node_start
         self.path = []
         self.vertex = [self.start_pos]
-        self.iter_max = 1000
+        #self.iter_max = 1
         self.env.removeAllUserDebugItems()
         self.tree_debug_lines = {}
         self.planning()
@@ -345,11 +352,14 @@ class RRTStarDynamic:
 
     def draw_path(self):
 
+        # for debug_line in self.path_debug_id:
+        #     self.env.removeUserDebugItem(debug_line)
         path_3d = [node + [0.1] for node in self.path]
         for i in range(1, len(self.path)):
-            self.env.addUserDebugLine(path_3d[i - 1],
+            self.path_debug_id.append(self.env.addUserDebugLine(path_3d[i - 1],
                                       path_3d[i],
-                                      [0, 0, 0])
+                                      [0, 0, 0],
+                                      5))
 
     def extract_waypoint(self, node_end):
         waypoint = [self.goal_pos]
@@ -386,8 +396,9 @@ class RRTStarDynamic:
                 # if neighbor_index:
                 self.vertex.append(node_new)
                 self.edges.append(Edge(node_nearest, node_new))
-                self.tree_debug_lines[((node_nearest.x, node_nearest.y), (node_new.x, node_new.y))] =\
-                    self.env.addUserDebugLine([node_nearest.x,node_nearest.y,0.1],[node_new.x,node_new.y,0.1],[0,0,1])
+                self.tree_debug_lines[((node_nearest.x, node_nearest.y), (node_new.x, node_new.y))] = \
+                    self.env.addUserDebugLine([node_nearest.x, node_nearest.y, 0.1], [node_new.x, node_new.y, 0.1],
+                                              [0, 0, 1])
                 dist, _ = self.get_distance_and_angle(node_new, self.goal_pos)
                 if dist <= self.step_len:
                     self.new_state(node_new, self.goal_pos)
@@ -396,18 +407,6 @@ class RRTStarDynamic:
                     self.waypoint = self.extract_waypoint(node_new)
                     return
         return None
-        # self.choose_parent(node_new, neighbor_index)
-        # self.tree_debug_lines[((node_new.x, node_new.y), (node_new.parent.x, node_new.parent.y))] = \
-        #     self.env.addUserDebugLine([node_new.x, node_new.y, 0.1],
-        #                               [node_new.parent.x, node_new.parent.y, 0.1],
-        #                               [0, 0, 1])
-        # self.rewire(node_new, neighbor_index)
-
-        # index = self.search_goal_parent()
-        # self.path = self.extract_path(self.vertex[index])
-        # # self.move_robot()
-        # self.path.reverse()
-        # return self.path
 
     def check_collision_on_path(self):
         for i in range(min(len(self.path) - 1, 5)):
@@ -416,6 +415,7 @@ class RRTStarDynamic:
                 [self.path[i + 1][0], self.path[i + 1][1], 0.1], [1, 0, 0], 10)
             if self.check_collision(Node(self.path[i][0], self.path[i][1]),
                                     Node(self.path[i + 1][0], self.path[i + 1][1])):
+                self.env.removeUserDebugItem(id)
                 return True
             self.env.removeUserDebugItem(id)
 
@@ -508,56 +508,40 @@ class RRTStarDynamic:
                 self.move_robot_to_target(self.path[0])
                 prev_node = self.path[0]
                 self.path.remove(self.path[0])
-                # # remove from vertex
-                # # current_vertex = [node for node in self.vertex if
-                # #                   (node.x == self.path[0][0] and node.y == self.path[0][1]) ]
-                # # current_vertex[0].is_valid = False
-                #
-                # if prev_node is not 0:
-                #     current_edge_parent = [edge for edge in self.edges
-                #                            if ((edge.child_node.x == self.path[0][0] and edge.child_node.y ==
-                #                                 self.path[0][1])
-                #                                and (edge.parent_node.x == prev_node[0] and edge.parent_node.y ==
-                #                                     prev_node[1]))]
-                #     current_edge_parent[0].is_valid = False
-                #     # current_edge_child = [edge for edge in self.edges
-                #     #                       if (edge.child_node.x == self.path[0][0] and edge.child_node.y ==
-                #     #                           self.path[0][1])]
-                #
-                # prev_node = self.path[0]
 
             else:
                 # self.re_planning()
                 current_vertex = []
                 if prev_node is not 0:
                     current_vertex = [node for node in self.vertex if
-                                  (node.x == prev_node[0] and node.y == prev_node[1])]
+                                      (node.x == prev_node[0] and node.y == prev_node[1])]
                 self.invalidate_nodes()
                 if self.is_path_invalid():
                     print("Lets re-plan....")
                     if current_vertex:
                         self.goal_pos = current_vertex[0]
                     self.dynamic_replanning()
+                    self.draw_path()
                 else:
                     self.trim_rrt()
 
 
-rrt_star_dynamic = RRTStarDynamic(start_pos=[-12, 12],
-                                  goal_pos=[12, -12],
-                                  step_len=1,
-                                  goal_sample_rate=0.1,
-                                  waypoint_sample_rate=0.6,
-                                  search_radius=12,
-                                  iter_max=5000)
+dynamic_rrt = DynamicRRT(start_pos=[-12, 12],
+                         goal_pos=[12, -12],
+                         step_len=1,
+                         goal_sample_rate=0.2,
+                         waypoint_sample_rate=0.6,
+                         search_radius=12,
+                         iter_max=5000)
 
-rrt_star_dynamic.setup_environment(True)
-path = rrt_star_dynamic.planning()
+dynamic_rrt.setup_environment(True)
+sleep(3)
+dynamic_rrt.planning()
 # input("Press Enter to continue...")
-rrt_star_dynamic.draw_path()
-print(path)
+dynamic_rrt.draw_path()
+#print(path)
 # input("Press Enter again to continue...")
-# path.reverse()
-# rrt_star.obstacles.append(p.loadURDF("../data/obstacle_2.urdf", [0, 0, 0], useFixedBase=1))
-rrt_star_dynamic.start_simulation()
+dynamic_rrt.start_simulation()
+print("--- %s seconds ---" % (time.time() - start_time))
 input("Press Enter again to exit...")
 print("The end!")
